@@ -1,0 +1,42 @@
+server:
+  port: ${PORT:8080}
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: campusfind-backend
+  datasource:
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/campusfind_db}
+    username: ${SPRING_DATASOURCE_USERNAME:muthuselvam}
+    password: ${SPRING_DATASOURCE_PASSWORD:}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 20MB
+
+campusfind:
+  jwt:
+    secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
+    expiration-ms: 86400000 # 24 hours
+  storage:
+    upload-dir: ${UPLOAD_DIR:uploads}
+  ai:
+    provider: ${CAMPUSFIND_AI_PROVIDER:local} # local, gemini, openai
+    api-key: ${CAMPUSFIND_AI_API_KEY:}
+    model: ${CAMPUSFIND_AI_MODEL:gemini-1.5-flash}
+  allowed-domains:
+    - student.university.edu
+    - staff.university.edu
+    - campus.edu
+    - gmail.com

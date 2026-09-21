@@ -1,0 +1,25 @@
+# Build directories
+target/
+**/target/
+dist/
+**/dist/
+node_modules/
+**/node_modules/
+
+# IDE & Editor files
+.idea/
+*.iml
+.vscode/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs & temp uploads
+*.log
+uploads/
+**/uploads/*
+!**/uploads/.gitkeep
+scratch/

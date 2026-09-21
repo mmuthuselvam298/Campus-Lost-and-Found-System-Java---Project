@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:campusfind_test;DB_CLOSE_DELAY=-1;MODE=PostgreSQL
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    database-platform: org.hibernate.dialect.H2Dialect
+  servlet:
+    multipart:
+      max-file-size: 15MB
+      max-request-size: 20MB
+
+campusfind:
+  jwt:
+    secret: 404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970
+    expiration-ms: 3600000
+  storage:
+    upload-dir: target/test-uploads
+  ai:
+    provider: local
+    api-key: 
+    model: test-model
