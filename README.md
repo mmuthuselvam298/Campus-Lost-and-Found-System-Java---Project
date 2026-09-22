@@ -1,13 +1,21 @@
 # CampusFind AI — Smart Campus Lost & Found Management System
 
-![CampusFind AI Architecture](https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F?style=for-the-badge&logo=springboot&logoColor=white)
-![Java](https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white)
-![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white)
-![React](https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&logo=typescript&logoColor=white)
-![Tailwind CSS](https://img.shields.io/badge/Tailwind%20CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white)
+<p align="center">
+  <img src="./docs/images/banner.jpg" alt="CampusFind AI — Smart Campus Lost & Found System Banner" width="100%" style="border-radius: 12px; box-shadow: 0 8px 30px rgba(0,0,0,0.3);" />
+</p>
 
-> An enterprise-grade, privacy-first Smart Campus Lost & Found ecosystem powered by **Multimodal Computer Vision**, **Explainable Multi-Signal Semantic Matching**, and **Cryptographic QR + OTP Handover Verification**.
+<p align="center">
+  <img src="https://img.shields.io/badge/Spring%20Boot-3.3.4-6DB33F?style=for-the-badge&logo=springboot&logoColor=white" alt="Spring Boot" />
+  <img src="https://img.shields.io/badge/Java-21-ED8B00?style=for-the-badge&logo=openjdk&logoColor=white" alt="Java 21" />
+  <img src="https://img.shields.io/badge/PostgreSQL-16-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" alt="PostgreSQL" />
+  <img src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" alt="React 19" />
+  <img src="https://img.shields.io/badge/TypeScript-5.9-3178C6?style=for-the-badge&logo=typescript&logoColor=white" alt="TypeScript" />
+  <img src="https://img.shields.io/badge/Tailwind%20CSS-3.4-38B2AC?style=for-the-badge&logo=tailwind-css&logoColor=white" alt="Tailwind CSS" />
+  <img src="https://img.shields.io/badge/ZXing%20QR-Pass-008080?style=for-the-badge" alt="ZXing QR" />
+  <img src="https://img.shields.io/badge/Security-JJWT%20SHA--256-blueviolet?style=for-the-badge" alt="JJWT" />
+</p>
+
+> **CampusFind AI** is an enterprise-grade, privacy-first Smart Campus Lost & Found ecosystem powered by **Multimodal Computer Vision**, **Explainable Multi-Signal Semantic Matching (6 signals)**, and **Cryptographic QR + OTP Handover Verification with SHA-256 Digital Receipts**.
 
 ---
 
