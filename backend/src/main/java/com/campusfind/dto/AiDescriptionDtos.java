@@ -21,6 +21,8 @@ public class AiDescriptionDtos {
         private String structuredDescription;
         private List<String> extractedKeywords;
         private List<String> clarifyingQuestions;
+        private boolean aiAvailable = true;
+        private String aiMessage;
 
         public DescriptionAssistResponse() {}
 
@@ -38,5 +40,9 @@ public class AiDescriptionDtos {
         public void setExtractedKeywords(List<String> extractedKeywords) { this.extractedKeywords = extractedKeywords; }
         public List<String> getClarifyingQuestions() { return clarifyingQuestions; }
         public void setClarifyingQuestions(List<String> clarifyingQuestions) { this.clarifyingQuestions = clarifyingQuestions; }
+        public boolean isAiAvailable() { return aiAvailable; }
+        public void setAiAvailable(boolean aiAvailable) { this.aiAvailable = aiAvailable; }
+        public String getAiMessage() { return aiMessage; }
+        public void setAiMessage(String aiMessage) { this.aiMessage = aiMessage; }
     }
 }

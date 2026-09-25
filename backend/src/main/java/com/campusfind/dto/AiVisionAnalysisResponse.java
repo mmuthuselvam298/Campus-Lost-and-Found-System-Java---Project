@@ -19,6 +19,8 @@ public class AiVisionAnalysisResponse {
     private String locationSuggestion;
     private String locationReason;
     private ImageQualityAssessment imageQuality;
+    private boolean aiAvailable = true;
+    private String aiMessage;
 
     public static class ImageQualityAssessment {
         private boolean adequate = true;
@@ -77,4 +79,8 @@ public class AiVisionAnalysisResponse {
     public void setLocationReason(String locationReason) { this.locationReason = locationReason; }
     public ImageQualityAssessment getImageQuality() { return imageQuality; }
     public void setImageQuality(ImageQualityAssessment imageQuality) { this.imageQuality = imageQuality; }
+    public boolean isAiAvailable() { return aiAvailable; }
+    public void setAiAvailable(boolean aiAvailable) { this.aiAvailable = aiAvailable; }
+    public String getAiMessage() { return aiMessage; }
+    public void setAiMessage(String aiMessage) { this.aiMessage = aiMessage; }
 }

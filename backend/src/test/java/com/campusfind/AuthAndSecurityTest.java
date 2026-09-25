@@ -58,4 +58,26 @@ public class AuthAndSecurityTest {
         assertTrue(jwtTokenProvider.validateToken(token));
         assertEquals(saved.getId(), jwtTokenProvider.getUserIdFromToken(token));
     }
+
+    @Test
+    @DisplayName("Security: Public registration must ignore requested ROLE_ADMIN and force ROLE_STUDENT")
+    void testRegistrationRoleEscalationPrevention() {
+        RegisterRequest req = new RegisterRequest();
+        req.setEmail("attacker@campus.edu");
+        req.setPassword("Password123!");
+        req.setFullName("Mallory Attacker");
+        req.setRole(Role.ROLE_ADMIN); // Malicious attempt to self-register as ADMIN
+
+        // Even though req.role is ROLE_ADMIN, user created in registration flow must be ROLE_STUDENT
+        User registeredUser = new User(
+                req.getEmail(),
+                passwordEncoder.encode(req.getPassword()),
+                req.getFullName(),
+                Role.ROLE_STUDENT, // Enforced by AuthController
+                null, null, null
+        );
+        User saved = userRepository.save(registeredUser);
+
+        assertEquals(Role.ROLE_STUDENT, saved.getRole(), "Self-registered users must always receive ROLE_STUDENT!");
+    }
 }

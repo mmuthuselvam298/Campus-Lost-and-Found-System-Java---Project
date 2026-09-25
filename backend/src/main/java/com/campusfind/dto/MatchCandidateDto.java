@@ -29,6 +29,7 @@ public class MatchCandidateDto {
     private Integer locationScore;
     private Integer timeScore;
     private Integer semanticScore;
+    private Integer visualScore;
     private List<String> matchReasons;
     private String status;
     private LocalDateTime createdAt;
@@ -79,6 +80,8 @@ public class MatchCandidateDto {
     public void setTimeScore(Integer timeScore) { this.timeScore = timeScore; }
     public Integer getSemanticScore() { return semanticScore; }
     public void setSemanticScore(Integer semanticScore) { this.semanticScore = semanticScore; }
+    public Integer getVisualScore() { return visualScore; }
+    public void setVisualScore(Integer visualScore) { this.visualScore = visualScore; }
     public List<String> getMatchReasons() { return matchReasons; }
     public void setMatchReasons(List<String> matchReasons) { this.matchReasons = matchReasons; }
     public String getStatus() { return status; }

@@ -11,6 +11,7 @@ import { AdminDashboardView } from './views/AdminDashboardView';
 import { ClaimModal } from './components/ClaimModal';
 import { ItemDetailModal } from './components/ItemDetailModal';
 import { SchedulePickupModal } from './components/SchedulePickupModal';
+import { AuthModal } from './components/AuthModal';
 import { DemoBanner } from './components/DemoBanner';
 import { api } from './services/api';
 import {
@@ -29,6 +30,7 @@ import {
 export function App() {
   const [currentView, setCurrentView] = useState<string>('home');
   const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(false);
 
   // Data Stores
   const [locations, setLocations] = useState<CampusLocation[]>([]);
@@ -160,6 +162,7 @@ export function App() {
         onNavigate={setCurrentView}
         currentUser={currentUser}
         onSwitchUser={handleSwitchUser}
+        onOpenAuth={() => setAuthModalOpen(true)}
         notifications={notifications}
         unreadCount={unreadCount}
         onMarkRead={handleMarkNotificationRead}
@@ -295,6 +298,15 @@ export function App() {
         onSuccess={async () => {
           await loadAllData();
           setCurrentView('pickup');
+        }}
+      />
+
+      <AuthModal
+        isOpen={authModalOpen}
+        onClose={() => setAuthModalOpen(false)}
+        onSuccess={async (user) => {
+          setCurrentUser(user);
+          await loadAllData();
         }}
       />
     </div>

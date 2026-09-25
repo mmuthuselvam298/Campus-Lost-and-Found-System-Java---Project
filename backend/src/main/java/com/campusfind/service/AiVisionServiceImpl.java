@@ -1,6 +1,8 @@
 package com.campusfind.service;
 
 import com.campusfind.dto.AiVisionAnalysisResponse;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Value;
@@ -11,6 +13,11 @@ import javax.imageio.ImageIO;
 import java.awt.Color;
 import java.awt.image.BufferedImage;
 import java.io.InputStream;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.*;
 
 @Service
@@ -27,64 +34,223 @@ public class AiVisionServiceImpl implements AiVisionService {
     @Value("${campusfind.ai.model:gemini-1.5-flash}")
     private String modelName;
 
+    private final ObjectMapper objectMapper;
+    private final HttpClient httpClient;
+
+    public AiVisionServiceImpl(ObjectMapper objectMapper) {
+        this.objectMapper = objectMapper;
+        this.httpClient = HttpClient.newBuilder()
+                .connectTimeout(Duration.ofSeconds(10))
+                .build();
+    }
+
     @Override
     public AiVisionAnalysisResponse analyzeImage(MultipartFile file, String contextHint) {
-        logger.info("Analyzing image with provider: {}, context hint: {}", provider, contextHint);
+        logger.info("Analyzing image with configured provider: '{}', model: '{}'", provider, modelName);
 
-        // Analyze image bytes directly using local image feature analysis
+        if (file == null || file.isEmpty()) {
+            return createUnavailableResponse("No image file provided for analysis.");
+        }
+
+        // 1. Verify image is decodable & assess basic image quality
+        BufferedImage image;
+        byte[] imageBytes;
         try (InputStream is = file.getInputStream()) {
-            BufferedImage image = ImageIO.read(is);
+            imageBytes = file.getBytes();
+            image = ImageIO.read(file.getInputStream());
             if (image == null) {
-                return createFallbackResponse("Unknown Item", "Unable to decode image");
+                return createUnavailableResponse("Unable to decode uploaded image. Please upload a standard JPEG, PNG, or WEBP file.");
             }
-
-            return processImageFeatures(image, file.getOriginalFilename(), contextHint);
         } catch (Exception e) {
-            logger.warn("Error processing image, using robust fallback: {}", e.getMessage());
-            return createFallbackResponse("Item", "Image analysis encountered an error. Please confirm details.");
+            logger.warn("Failed to read image stream: {}", e.getMessage());
+            return createUnavailableResponse("Error processing uploaded image. Please enter details manually.");
+        }
+
+        AiVisionAnalysisResponse.ImageQualityAssessment localQuality = assessBasicQuality(image);
+
+        // 2. Dispatch to Real AI Multimodal Provider
+        if ("gemini".equalsIgnoreCase(provider)) {
+            if (apiKey == null || apiKey.isBlank()) {
+                logger.info("Gemini provider selected but AI_API_KEY is not set. Returning graceful fallback.");
+                return createManualFallbackResponse("AI assistance is temporarily unavailable (Gemini API key not configured). Please enter details manually.", localQuality);
+            }
+            return callGeminiVision(imageBytes, file.getContentType(), contextHint, localQuality);
+        } else if ("openai".equalsIgnoreCase(provider)) {
+            if (apiKey == null || apiKey.isBlank()) {
+                logger.info("OpenAI provider selected but AI_API_KEY is not set. Returning graceful fallback.");
+                return createManualFallbackResponse("AI assistance is temporarily unavailable (OpenAI API key not configured). Please enter details manually.", localQuality);
+            }
+            return callOpenAiVision(imageBytes, file.getContentType(), contextHint, localQuality);
+        } else {
+            // Local / Offline mode: Do not return fake AI results pretending to be computer vision
+            logger.info("Local/offline mode active. Prompting user for manual verification.");
+            return createManualFallbackResponse("AI assistance is in offline mode. Please verify or enter item details manually.", localQuality);
         }
     }
 
-    private AiVisionAnalysisResponse processImageFeatures(BufferedImage image, String filename, String contextHint) {
+    private AiVisionAnalysisResponse callGeminiVision(byte[] imageBytes, String mimeType, String contextHint, AiVisionAnalysisResponse.ImageQualityAssessment localQuality) {
+        try {
+            String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+            String safeMime = (mimeType != null && mimeType.contains("png")) ? "image/png" : "image/jpeg";
+
+            String prompt = "You are the vision AI for CampusFind, a university smart Lost & Found platform. " +
+                    "Inspect this photograph of a found campus item carefully. " +
+                    "Return ONLY a valid JSON object matching the exact schema below. Distinguish strictly between OBSERVED facts (colors, markings, visible damage, brand logos) and INFERRED possibilities (hypothetical contents, campus locations). " +
+                    (contextHint != null && !contextHint.isBlank() ? "Context hint provided by finder: " + contextHint + ". " : "") +
+                    "Schema:\n" +
+                    "{\n" +
+                    "  \"category\": \"Item category (one of: Bags, Electronics, Phones, Wallets, ID Cards, Bottles, Keys, Umbrellas, Books, Clothing, Other)\",\n" +
+                    "  \"subcategory\": \"Specific subcategory (e.g. Laptop Backpack, Graphing Calculator, Insulated Tumbler)\",\n" +
+                    "  \"color\": \"Primary dominant color name\",\n" +
+                    "  \"brand\": \"Identifiable brand or logo name, or null\",\n" +
+                    "  \"material\": \"Observed physical material (e.g. Nylon Fabric, Stainless Steel, Leather, Laminated Plastic)\",\n" +
+                    "  \"visibleText\": \"Any visible text, numbers, or engravings, or null\",\n" +
+                    "  \"distinctiveFeatures\": \"Specific visible features (stickers, scratches, zipper pulls, keychains)\",\n" +
+                    "  \"observedFeatures\": [\"Directly observed feature 1\", \"Directly observed feature 2\"],\n" +
+                    "  \"inferredFeatures\": [\"Inferred feature 1\", \"Inferred feature 2\"],\n" +
+                    "  \"confidenceScore\": 0.92,\n" +
+                    "  \"confidenceLevel\": \"High confidence\" | \"Medium confidence\" | \"Low confidence\",\n" +
+                    "  \"verificationQuestions\": [\"Question 1 for claimant regarding hidden private attributes\", \"Question 2\"],\n" +
+                    "  \"locationSuggestion\": \"Campus building name where this item is typically found (e.g. Central Library, Student Cafeteria, Academic Block A, Sports Complex)\",\n" +
+                    "  \"locationReason\": \"Brief justification for location suggestion\",\n" +
+                    "  \"imageQuality\": {\n" +
+                    "    \"adequate\": true,\n" +
+                    "    \"lightingCondition\": \"Good\",\n" +
+                    "    \"clarity\": \"Sharp\",\n" +
+                    "    \"suggestion\": \"Image clarity is adequate\"\n" +
+                    "  }\n" +
+                    "}";
+
+            Map<String, Object> textPart = Map.of("text", prompt);
+            Map<String, Object> inlineData = Map.of("mimeType", safeMime, "data", base64Image);
+            Map<String, Object> imagePart = Map.of("inlineData", inlineData);
+
+            Map<String, Object> content = Map.of("parts", List.of(textPart, imagePart));
+            Map<String, Object> generationConfig = Map.of(
+                    "temperature", 0.1,
+                    "responseMimeType", "application/json"
+            );
+            Map<String, Object> requestBody = Map.of(
+                    "contents", List.of(content),
+                    "generationConfig", generationConfig
+            );
+
+            String requestJson = objectMapper.writeValueAsString(requestBody);
+            String url = "https://generativelanguage.googleapis.com/v1beta/models/" + modelName + ":generateContent?key=" + apiKey;
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create(url))
+                    .header("Content-Type", "application/json")
+                    .timeout(Duration.ofSeconds(20))
+                    .POST(HttpRequest.BodyPublishers.ofString(requestJson))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+
+            if (response.statusCode() == 200) {
+                JsonNode root = objectMapper.readTree(response.body());
+                JsonNode candidateText = root.path("candidates").path(0).path("content").path("parts").path(0).path("text");
+                if (!candidateText.isMissingNode()) {
+                    String jsonText = cleanJsonResponse(candidateText.asText());
+                    AiVisionAnalysisResponse result = objectMapper.readValue(jsonText, AiVisionAnalysisResponse.class);
+                    result.setAiAvailable(true);
+                    result.setAiMessage("AI multimodal vision analysis complete.");
+                    if (result.getImageQuality() == null) {
+                        result.setImageQuality(localQuality);
+                    }
+                    return result;
+                }
+            } else {
+                logger.warn("Gemini API returned error code {}: {}", response.statusCode(), response.body());
+            }
+        } catch (Exception e) {
+            logger.warn("Gemini vision analysis failed: {}", e.getMessage());
+        }
+
+        return createManualFallbackResponse("AI assistance is temporarily unavailable. Please enter details manually.", localQuality);
+    }
+
+    private AiVisionAnalysisResponse callOpenAiVision(byte[] imageBytes, String mimeType, String contextHint, AiVisionAnalysisResponse.ImageQualityAssessment localQuality) {
+        try {
+            String base64Image = Base64.getEncoder().encodeToString(imageBytes);
+            String safeMime = (mimeType != null && mimeType.contains("png")) ? "image/png" : "image/jpeg";
+            String dataUrl = "data:" + safeMime + ";base64," + base64Image;
+
+            String prompt = "You are the vision AI for CampusFind. Inspect this campus lost/found item photograph. " +
+                    "Return ONLY a JSON object matching this schema:\n" +
+                    "{\"category\":\"...\",\"subcategory\":\"...\",\"color\":\"...\",\"brand\":\"...\",\"material\":\"...\",\"visibleText\":\"...\",\"distinctiveFeatures\":\"...\",\"observedFeatures\":[\"...\"],\"inferredFeatures\":[\"...\"],\"confidenceScore\":0.90,\"confidenceLevel\":\"High confidence\",\"verificationQuestions\":[\"...\"],\"locationSuggestion\":\"...\",\"locationReason\":\"...\",\"imageQuality\":{\"adequate\":true,\"lightingCondition\":\"Good\",\"clarity\":\"Sharp\",\"suggestion\":\"Clear\"}}";
+
+            Map<String, Object> textMessage = Map.of("type", "text", "text", prompt);
+            Map<String, Object> imageMessage = Map.of("type", "image_url", "image_url", Map.of("url", dataUrl));
+
+            Map<String, Object> userMessage = Map.of("role", "user", "content", List.of(textMessage, imageMessage));
+            Map<String, Object> payload = Map.of(
+                    "model", modelName != null && !modelName.isBlank() ? modelName : "gpt-4o-mini",
+                    "messages", List.of(userMessage),
+                    "temperature", 0.1,
+                    "response_format", Map.of("type", "json_object")
+            );
+
+            HttpRequest request = HttpRequest.newBuilder()
+                    .uri(URI.create("https://api.openai.com/v1/chat/completions"))
+                    .header("Content-Type", "application/json")
+                    .header("Authorization", "Bearer " + apiKey)
+                    .timeout(Duration.ofSeconds(20))
+                    .POST(HttpRequest.BodyPublishers.ofString(objectMapper.writeValueAsString(payload)))
+                    .build();
+
+            HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                JsonNode root = objectMapper.readTree(response.body());
+                String contentJson = root.path("choices").path(0).path("message").path("content").asText();
+                if (contentJson != null && !contentJson.isBlank()) {
+                    AiVisionAnalysisResponse result = objectMapper.readValue(cleanJsonResponse(contentJson), AiVisionAnalysisResponse.class);
+                    result.setAiAvailable(true);
+                    result.setAiMessage("AI multimodal vision analysis complete.");
+                    if (result.getImageQuality() == null) {
+                        result.setImageQuality(localQuality);
+                    }
+                    return result;
+                }
+            } else {
+                logger.warn("OpenAI API returned error code {}: {}", response.statusCode(), response.body());
+            }
+        } catch (Exception e) {
+            logger.warn("OpenAI vision analysis failed: {}", e.getMessage());
+        }
+
+        return createManualFallbackResponse("AI assistance is temporarily unavailable. Please enter details manually.", localQuality);
+    }
+
+    private AiVisionAnalysisResponse.ImageQualityAssessment assessBasicQuality(BufferedImage image) {
         int width = image.getWidth();
         int height = image.getHeight();
 
-        // 1. Color Dominance & Brightness Analysis
         long totalBrightness = 0;
         int sampleCount = 0;
-        Map<String, Integer> colorBins = new HashMap<>();
 
-        for (int y = 0; y < height; y += Math.max(1, height / 50)) {
-            for (int x = 0; x < width; x += Math.max(1, width / 50)) {
+        for (int y = 0; y < height; y += Math.max(1, height / 30)) {
+            for (int x = 0; x < width; x += Math.max(1, width / 30)) {
                 int rgb = image.getRGB(x, y);
                 Color c = new Color(rgb);
-                int brightness = (c.getRed() + c.getGreen() + c.getBlue()) / 3;
-                totalBrightness += brightness;
+                totalBrightness += (c.getRed() + c.getGreen() + c.getBlue()) / 3;
                 sampleCount++;
-
-                String colorName = classifyRgbColor(c.getRed(), c.getGreen(), c.getBlue());
-                colorBins.put(colorName, colorBins.getOrDefault(colorName, 0) + 1);
             }
         }
 
         int avgBrightness = sampleCount > 0 ? (int) (totalBrightness / sampleCount) : 128;
-        String dominantColor = colorBins.entrySet().stream()
-                .max(Map.Entry.comparingByValue())
-                .map(Map.Entry::getKey)
-                .orElse("Dark Grey");
-
-        // 2. Image Quality Assessment
         AiVisionAnalysisResponse.ImageQualityAssessment quality = new AiVisionAnalysisResponse.ImageQualityAssessment();
+
         if (avgBrightness < 45) {
             quality.setAdequate(false);
             quality.setLightingCondition("Low Light / Underexposed");
             quality.setClarity("Dim");
-            quality.setSuggestion("The photograph is rather dark. Consider taking another under brighter campus lighting.");
-        } else if (avgBrightness > 225) {
+            quality.setSuggestion("Image is dark. Consider taking a photo in better campus lighting.");
+        } else if (avgBrightness > 230) {
             quality.setAdequate(true);
             quality.setLightingCondition("High Brightness / Overexposed");
-            quality.setClarity("Sharp");
-            quality.setSuggestion("High glare detected. The item attributes remain identifiable.");
+            quality.setClarity("Acceptable");
+            quality.setSuggestion("Noticeable glare detected. Key item features remain distinguishable.");
         } else {
             quality.setAdequate(true);
             quality.setLightingCondition("Optimal Campus Lighting");
@@ -92,155 +258,58 @@ public class AiVisionServiceImpl implements AiVisionService {
             quality.setSuggestion("Image clarity is sufficient for item identification.");
         }
 
-        // 3. Category & Attribute Identification Heuristic
-        String detectedCategory = "Backpack";
-        String detectedSubcategory = "Campus Daypack";
-        String detectedBrand = "Nike";
-        String detectedMaterial = "Durable Fabric & Nylon";
-        String detectedVisibleText = "Swoosh emblem";
-        String distinctiveFeatures = "Side bottle pocket with red zipper pull";
-        String locationSuggestion = "Central Library";
-        String locationReason = "Common study zone backdrop and interior lighting.";
-        double confidence = 0.92;
+        return quality;
+    }
 
-        String hint = ((filename != null ? filename : "") + " " + (contextHint != null ? contextHint : "")).toLowerCase();
-
-        if (hint.contains("bottle") || hint.contains("flask") || hint.contains("water")) {
-            detectedCategory = "Bottles";
-            detectedSubcategory = "Insulated Water Bottle";
-            detectedBrand = "Hydro Flask / Milton";
-            detectedMaterial = "Stainless Steel";
-            detectedVisibleText = "Capacity markings";
-            distinctiveFeatures = "Silver screw cap with silicone carry loop";
-            locationSuggestion = "Sports Complex / Gym";
-            locationReason = "Hydration items frequently misplaced near athletic courts or classrooms.";
-            confidence = 0.94;
-        } else if (hint.contains("phone") || hint.contains("mobile") || hint.contains("iphone") || hint.contains("samsung")) {
-            detectedCategory = "Phones";
-            detectedSubcategory = "Smartphone";
-            detectedBrand = "Apple / Samsung";
-            detectedMaterial = "Glass and Aluminum Frame";
-            detectedVisibleText = "Locked lockscreen";
-            distinctiveFeatures = "Translucent silicone protective case with card slot";
-            locationSuggestion = "Student Cafeteria";
-            locationReason = "Dining table surfaces and charging benches.";
-            confidence = 0.96;
-        } else if (hint.contains("id") || hint.contains("card") || hint.contains("badge")) {
-            detectedCategory = "ID Cards";
-            detectedSubcategory = "Student ID Badge";
-            detectedBrand = "University Campus Services";
-            detectedMaterial = "Laminated PVC";
-            detectedVisibleText = "ID ********* [Masked for Privacy]";
-            distinctiveFeatures = "Blue lanyard with breakaway clip";
-            locationSuggestion = "Academic Block A";
-            locationReason = "Access control turnstiles or lecture halls.";
-            confidence = 0.98;
-        } else if (hint.contains("wallet") || hint.contains("purse")) {
-            detectedCategory = "Wallets";
-            detectedSubcategory = "Bi-Fold Wallet";
-            detectedBrand = "Leathercraft";
-            detectedMaterial = "Genuine Leather";
-            detectedVisibleText = "Subtle embossed logo";
-            distinctiveFeatures = "Coin pocket and multiple card slots";
-            locationSuggestion = "Central Library";
-            locationReason = "Reading cubicles and printing station.";
-            confidence = 0.91;
-        } else if (hint.contains("laptop") || hint.contains("macbook") || hint.contains("charger") || hint.contains("airpod") || hint.contains("earbud")) {
-            detectedCategory = "Electronics";
-            detectedSubcategory = "Personal Computing / Audio";
-            detectedBrand = "Apple / Dell / Lenovo";
-            detectedMaterial = "Anodized Aluminum / Polymer";
-            detectedVisibleText = "Model specifications";
-            distinctiveFeatures = "Matte finish with university sticker";
-            locationSuggestion = "Computer Science Lab Block";
-            locationReason = "Workstation desks and lab benches.";
-            confidence = 0.93;
-        } else if (hint.contains("umbrella")) {
-            detectedCategory = "Umbrellas";
-            detectedSubcategory = "Compact Windproof Umbrella";
-            detectedBrand = "Campus Standard";
-            detectedMaterial = "Waterproof Polyester & Fiberglass Ribs";
-            detectedVisibleText = "No visible brand text";
-            distinctiveFeatures = "Curved rubberized grip with wrist strap";
-            locationSuggestion = "Campus Main Gate / Bus Stop";
-            locationReason = "Entryway umbrella racks and transit shelter.";
-            confidence = 0.89;
-        } else if (hint.contains("key")) {
-            detectedCategory = "Keys";
-            detectedSubcategory = "Key Ring Set";
-            detectedBrand = "Brass Locksmith";
-            detectedMaterial = "Steel and Brass";
-            detectedVisibleText = "Room number stamped on tag";
-            distinctiveFeatures = "Blue miniature metallic carabiner with 3 keys";
-            locationSuggestion = "Hostel Block A";
-            locationReason = "Dormitory entry corridors or front desk.";
-            confidence = 0.95;
+    private String cleanJsonResponse(String raw) {
+        String trimmed = raw.trim();
+        if (trimmed.startsWith("```json")) {
+            trimmed = trimmed.substring(7);
+        } else if (trimmed.startsWith("```")) {
+            trimmed = trimmed.substring(3);
         }
-
-        AiVisionAnalysisResponse response = new AiVisionAnalysisResponse();
-        response.setCategory(detectedCategory);
-        response.setSubcategory(detectedSubcategory);
-        response.setColor(dominantColor);
-        response.setBrand(detectedBrand);
-        response.setMaterial(detectedMaterial);
-        response.setVisibleText(detectedVisibleText);
-        response.setDistinctiveFeatures(distinctiveFeatures);
-        response.setConfidenceScore(confidence);
-        response.setConfidenceLevel(confidence >= 0.90 ? "High confidence" : "Medium confidence");
-        response.setLocationSuggestion(locationSuggestion);
-        response.setLocationReason(locationReason);
-        response.setImageQuality(quality);
-
-        // Strictly distinguish observed vs inferred features
-        List<String> observed = new ArrayList<>();
-        observed.add("Observed Color: " + dominantColor);
-        observed.add("Primary Material: " + detectedMaterial);
-        observed.add("Visible Markings: " + detectedVisibleText);
-        observed.add("Physical Features: " + distinctiveFeatures);
-        response.setObservedFeatures(observed);
-
-        List<String> inferred = new ArrayList<>();
-        inferred.add("Inferred Subcategory: " + detectedSubcategory);
-        inferred.add("Suggested Campus Location: " + locationSuggestion + " (" + locationReason + ")");
-        inferred.add("Estimated Usage: Standard student daily campus gear");
-        response.setInferredFeatures(inferred);
-
-        // Anti-Fraud Verification Questions for claim validation
-        List<String> questions = new ArrayList<>();
-        questions.add("What is the exact brand, engraving, or sticker on the item?");
-        questions.add("Are there any items, cards, or notes placed inside compartments?");
-        questions.add("Can you describe any unique scratch, keychain, or zipper pull?");
-        response.setVerificationQuestions(questions);
-
-        return response;
+        if (trimmed.endsWith("```")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 3);
+        }
+        return trimmed.trim();
     }
 
-    private String classifyRgbColor(int r, int g, int b) {
-        if (r < 50 && g < 50 && b < 50) return "Black";
-        if (r > 200 && g > 200 && b > 200) return "White";
-        if (Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && Math.abs(r - b) < 20) return "Grey / Silver";
-        if (r > g + 40 && r > b + 40) return "Red";
-        if (b > r + 40 && b > g + 30) return "Blue / Navy";
-        if (g > r + 30 && g > b + 30) return "Green";
-        if (r > 160 && g > 130 && b < 80) return "Yellow / Gold";
-        if (r > 130 && g > 60 && b < 50) return "Brown / Tan";
-        if (r > 130 && b > 130 && g < 100) return "Purple";
-        return "Dark Tone";
-    }
-
-    private AiVisionAnalysisResponse createFallbackResponse(String defaultCategory, String note) {
+    private AiVisionAnalysisResponse createUnavailableResponse(String message) {
         AiVisionAnalysisResponse resp = new AiVisionAnalysisResponse();
-        resp.setCategory(defaultCategory);
+        resp.setAiAvailable(false);
+        resp.setAiMessage(message);
+        resp.setCategory("Other");
         resp.setColor("Unknown");
-        resp.setConfidenceScore(0.70);
-        resp.setConfidenceLevel("Medium confidence");
-        resp.setObservedFeatures(Collections.singletonList("Image uploaded successfully"));
-        resp.setInferredFeatures(Collections.singletonList(note));
+        resp.setConfidenceScore(null);
+        resp.setConfidenceLevel("Unavailable");
+        resp.setObservedFeatures(Collections.emptyList());
+        resp.setInferredFeatures(Collections.emptyList());
         resp.setVerificationQuestions(Arrays.asList(
-                "Please describe distinguishing marks or stickers on your item.",
-                "What was inside the item or attached to it?"
+                "Please describe distinguishing markings, serial numbers, or stickers.",
+                "What was inside or attached to the item?"
         ));
-        resp.setImageQuality(new AiVisionAnalysisResponse.ImageQualityAssessment(true, "Normal", "Acceptable", "Please verify detected fields."));
+        resp.setImageQuality(new AiVisionAnalysisResponse.ImageQualityAssessment(false, "Unverified", "Unverified", message));
+        return resp;
+    }
+
+    private AiVisionAnalysisResponse createManualFallbackResponse(String message, AiVisionAnalysisResponse.ImageQualityAssessment quality) {
+        AiVisionAnalysisResponse resp = new AiVisionAnalysisResponse();
+        resp.setAiAvailable(false);
+        resp.setAiMessage(message);
+        resp.setCategory("");
+        resp.setColor("");
+        resp.setBrand("");
+        resp.setMaterial("");
+        resp.setDistinctiveFeatures("");
+        resp.setConfidenceScore(null);
+        resp.setConfidenceLevel("Manual Entry");
+        resp.setObservedFeatures(Collections.singletonList("Image uploaded and stored safely."));
+        resp.setInferredFeatures(Collections.singletonList("Please confirm item details manually."));
+        resp.setVerificationQuestions(Arrays.asList(
+                "What unique items, papers, or marks are inside or on the item?",
+                "Are there any specific scratches or attachments?"
+        ));
+        resp.setImageQuality(quality);
         return resp;
     }
 }

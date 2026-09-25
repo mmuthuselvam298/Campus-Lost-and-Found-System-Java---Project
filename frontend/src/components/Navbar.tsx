@@ -19,6 +19,7 @@ interface NavbarProps {
   onNavigate: (view: string) => void;
   currentUser: User | null;
   onSwitchUser: (email: string) => void;
+  onOpenAuth?: () => void;
   notifications: NotificationItem[];
   unreadCount: number;
   onMarkRead: (id: number) => void;
@@ -30,6 +31,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNavigate,
   currentUser,
   onSwitchUser,
+  onOpenAuth,
   notifications,
   unreadCount,
   onMarkRead,
@@ -232,9 +234,22 @@ export const Navbar: React.FC<NavbarProps> = ({
               {/* Role Switcher Dropdown */}
               {showUserMenu && (
                 <div className="absolute right-0 mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50">
-                  <div className="px-3 py-2 border-b border-slate-100 mb-1">
-                    <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Quick Demo Switcher</p>
-                    <p className="text-xs text-slate-600">Simulate different campus accounts:</p>
+                  <div className="px-3 py-2 border-b border-slate-100 mb-1 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Quick Demo Switcher</p>
+                      <p className="text-[11px] text-slate-600">Simulate different accounts:</p>
+                    </div>
+                    {onOpenAuth && (
+                      <button
+                        onClick={() => {
+                          setShowUserMenu(false);
+                          onOpenAuth();
+                        }}
+                        className="text-[11px] font-bold text-brand-600 hover:text-brand-700 bg-brand-50 px-2 py-1 rounded-lg"
+                      >
+                        Sign In / Reg
+                      </button>
+                    )}
                   </div>
 
                   <button

@@ -131,12 +131,12 @@ public class PickupService {
         PickupAppointment appointment = null;
 
         if (request.getQrToken() != null && !request.getQrToken().isBlank()) {
-            appointment = pickupAppointmentRepository.findByQrToken(request.getQrToken())
+            appointment = pickupAppointmentRepository.findByQrTokenForUpdate(request.getQrToken().trim())
                     .orElse(null);
         }
 
         if (appointment == null && request.getOtpCode() != null && !request.getOtpCode().isBlank()) {
-            appointment = pickupAppointmentRepository.findByOtpCode(request.getOtpCode().trim())
+            appointment = pickupAppointmentRepository.findByOtpCodeForUpdate(request.getOtpCode().trim())
                     .orElse(null);
         }
 

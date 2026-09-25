@@ -30,6 +30,7 @@ public class MatchCandidate {
     private Integer locationScore;
     private Integer timeScore;
     private Integer semanticScore;
+    private Integer visualScore;
 
     @Column(columnDefinition = "TEXT")
     private String matchReasons; // Semicolon or JSON separated explainable bullet points
@@ -69,6 +70,8 @@ public class MatchCandidate {
     public void setTimeScore(Integer timeScore) { this.timeScore = timeScore; }
     public Integer getSemanticScore() { return semanticScore; }
     public void setSemanticScore(Integer semanticScore) { this.semanticScore = semanticScore; }
+    public Integer getVisualScore() { return visualScore; }
+    public void setVisualScore(Integer visualScore) { this.visualScore = visualScore; }
     public String getMatchReasons() { return matchReasons; }
     public void setMatchReasons(String matchReasons) { this.matchReasons = matchReasons; }
     public String getStatus() { return status; }

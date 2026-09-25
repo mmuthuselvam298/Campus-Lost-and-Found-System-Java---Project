@@ -7,9 +7,9 @@ spring:
   application:
     name: campusfind-backend
   datasource:
-    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/campusfind_db}
-    username: ${SPRING_DATASOURCE_USERNAME:muthuselvam}
-    password: ${SPRING_DATASOURCE_PASSWORD:}
+    url: ${DATABASE_URL:${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/campusfind_db}}
+    username: ${DATABASE_USERNAME:${SPRING_DATASOURCE_USERNAME:muthuselvam}}
+    password: ${DATABASE_PASSWORD:${SPRING_DATASOURCE_PASSWORD:}}
     driver-class-name: org.postgresql.Driver
   jpa:
     hibernate:
@@ -28,15 +28,31 @@ spring:
 campusfind:
   jwt:
     secret: ${JWT_SECRET:404E635266556A586E3272357538782F413F4428472B4B6250645367566B5970}
-    expiration-ms: 86400000 # 24 hours
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000} # 24 hours
   storage:
-    upload-dir: ${UPLOAD_DIR:uploads}
+    upload-dir: ${STORAGE_PATH:${UPLOAD_DIR:uploads}}
   ai:
-    provider: ${CAMPUSFIND_AI_PROVIDER:local} # local, gemini, openai
-    api-key: ${CAMPUSFIND_AI_API_KEY:}
-    model: ${CAMPUSFIND_AI_MODEL:gemini-1.5-flash}
+    provider: ${AI_PROVIDER:${CAMPUSFIND_AI_PROVIDER:local}} # local, gemini, openai
+    api-key: ${AI_API_KEY:${CAMPUSFIND_AI_API_KEY:}}
+    model: ${AI_MODEL:${CAMPUSFIND_AI_MODEL:gemini-1.5-flash}}
+  matching:
+    weights:
+      category: ${MATCH_WEIGHT_CATEGORY:0.25}
+      color: ${MATCH_WEIGHT_COLOR:0.15}
+      brand: ${MATCH_WEIGHT_BRAND:0.15}
+      location: ${MATCH_WEIGHT_LOCATION:0.15}
+      time: ${MATCH_WEIGHT_TIME:0.10}
+      semantic: ${MATCH_WEIGHT_SEMANTIC:0.20}
+      visual: ${MATCH_WEIGHT_VISUAL:0.00}
+    threshold: ${MATCH_THRESHOLD:50}
+  rate-limiting:
+    enabled: true
+    auth-limit-per-minute: 20
+    ai-limit-per-minute: 15
+    general-limit-per-minute: 100
   allowed-domains:
     - student.university.edu
     - staff.university.edu
     - campus.edu
     - gmail.com
+

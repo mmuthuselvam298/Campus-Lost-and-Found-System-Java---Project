@@ -19,6 +19,14 @@ public interface PickupAppointmentRepository extends JpaRepository<PickupAppoint
 
     Optional<PickupAppointment> findByOtpCode(String otpCode);
 
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM PickupAppointment p WHERE p.qrToken = :qrToken")
+    Optional<PickupAppointment> findByQrTokenForUpdate(@Param("qrToken") String qrToken);
+
+    @org.springframework.data.jpa.repository.Lock(jakarta.persistence.LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT p FROM PickupAppointment p WHERE p.otpCode = :otpCode")
+    Optional<PickupAppointment> findByOtpCodeForUpdate(@Param("otpCode") String otpCode);
+
     @Query("SELECT p FROM PickupAppointment p WHERE p.claim.claimant.id = :userId ORDER BY p.scheduledDate DESC")
     List<PickupAppointment> findByClaimantUserId(@Param("userId") Long userId);
 
